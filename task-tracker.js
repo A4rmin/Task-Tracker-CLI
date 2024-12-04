@@ -76,7 +76,20 @@ switch (command) {
         }
         break;
     case "delete":
-        console.log("Deleting a task ...");
+        const deleteId = parseInt(args[1]);
+        if (isNaN(deleteId)) {
+            console.log("Error: Please provide a valid task ID.")
+        } else {
+            const tasks = readTasks();
+            const taskIndex = tasks.findIndex((task) => task.id === deleteId);
+            if (taskIndex === -1) {
+                console.log(`Error: Task with ID ${deleteId} not found.`);
+            } else {
+                const deletedTask = tasks.splice(taskIndex, 1);
+                writeTasks(tasks);
+                console.log(`Task deleted: "${deletedTask[0].description}" (ID: ${deleteId})`);
+            };
+        };
         break;
     case "mark-done":
         console.log("Marking a task as done ...");
