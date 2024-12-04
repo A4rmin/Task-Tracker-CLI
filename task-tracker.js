@@ -18,7 +18,7 @@ const readTasks = () => {
     return JSON.parse(fileContent);
 }
 
-const writeTasks = () => {
+const writeTasks = (tasks) => {
     fs.writeFileSync(filePath, JSON.stringify(tasks, null, 2));
     console.log("Tasks saved successfully.");
 }
@@ -46,10 +46,34 @@ const displayHelp = () => {
 // command handlers
 switch (command) {
     case "add":
-        console.log("Adding a task ...");
+        const taskDescription = args[1];
+        if (!taskDescription) {
+            console.log("ERROR: Please provide a task description.");
+        } else {
+            const tasks = readTasks();
+            const newTask = {
+                id: tasks.length + 1,
+                description: taskDescription,
+                status: "todo",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            };
+            tasks.push(newTask)
+            writeTasks(tasks)
+            console.log(`Task added: ${taskDescription} (ID: ${newTask.id})`);
+        }
         break;
+
     case "list":
-        console.log("listing all tasks ...");
+        const tasks = readTasks();
+        if (tasks.length === 0) {
+            console.log("No tasks found.");
+        } else {
+            console.log("Tasks:");
+            tasks.forEach(task => {
+                console.log(`[${task.id}] ${task.description} - ${task.status}`);
+            });
+        }
         break;
     case "delete":
         console.log("Deleting a task ...");
