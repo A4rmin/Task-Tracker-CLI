@@ -44,15 +44,17 @@ const displayHelp = () => {
 
 
 // command handlers
+const tasks = readTasks();
+
 switch (command) {
     case "add":
         const taskDescription = args[1];
         if (!taskDescription) {
             console.log("Error: Please provide a task description.");
         } else {
-            const tasks = readTasks();
+            const newId = tasks.length > 0 ? Math.max(...tasks.map(task => task.id)) + 1 : 1;
             const newTask = {
-                id: tasks.length + 1,
+                id: newId,
                 description: taskDescription,
                 status: "todo",
                 createdAt: new Date().toISOString(),
@@ -65,13 +67,12 @@ switch (command) {
         break;
 
     case "list":
-        const tasks = readTasks();
         if (tasks.length === 0) {
             console.log("No tasks found.");
         } else {
             console.log("Tasks:");
             tasks.forEach(task => {
-                console.log(`[${task.id}] ${task.description} - ${task.status.toUpperCase()} (Created: ${new Date(task.createdAt).toLocaleString()})`);
+                console.log(`[ID: ${task.id}] ${task.description} - Status: ${task.status.toUpperCase()} (Created: ${new Date(task.createdAt).toLocaleString()})`);
             });
         }
         break;
@@ -130,7 +131,7 @@ switch (command) {
         break;
     case "mark-undone":
         const undoneId = parseInt(args[1]);
-        if (isNAN(undoneId)) {
+        if (isNaN(undoneId)) {
             console.log("Error: Please provide a valid task ID.")
         } else {
             const tasks = readTasks();
@@ -147,7 +148,16 @@ switch (command) {
         }
         break;
     case "todo":
-        console.log("Displaying tasks to do ...");
+        const todoTasks = tasks.filter(task => task.status === "todo"); // Filter tasks with status "todo"
+
+        if (todoTasks.length === 0) {
+            console.log("No tasks to do.");
+        } else {
+            console.log("Tasks to do:");
+            todoTasks.forEach(task => {
+                console.log(`[ID: ${task.id}] ${task.description} - Status: ${task.status.toUpperCase()} (Created: ${new Date(task.createdAt).toLocaleString()})`);
+            });
+        }
         break;
     case "help":
         displayHelp();
