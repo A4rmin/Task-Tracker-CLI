@@ -1,5 +1,3 @@
-// Task Tracker CLI App with Admin and User Role Management
-
 const args = process.argv.slice(2);
 const command = args[0];
 const fs = require("fs");
@@ -15,7 +13,7 @@ const TaskStatus = {
     IN_PROGRESS: "in-progress",
 };
 
-// Helper Functions (Async File Operations)
+// Helper Functions for File Operations
 const readFileAsync = async (filePath) => {
     try {
         const data = await fs.promises.readFile(filePath, "utf-8");
@@ -29,17 +27,17 @@ const readFileAsync = async (filePath) => {
 const writeFileAsync = async (filePath, data) => {
     try {
         await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2));
-        console.log(`${filePath} updated successfully.`);
+        console.log(`${path.basename(filePath)} updated successfully.`);
     } catch (err) {
         console.error(`Error writing to file ${filePath}:`, err);
     }
 };
 
-// Initialize files if not exist
+// Initialize files if they don't exist
 const initializeFiles = async () => {
     const files = [
         { path: tasksFilePath, defaultData: [] },
-        { path: usersFilePath, defaultData: [{ username: "admin", password: "admin", role: "admin" }] },
+        { path: usersFilePath, defaultData: [{ username: "admin", password: "admin123", role: "admin" }] },
     ];
 
     for (const file of files) {
@@ -50,13 +48,7 @@ const initializeFiles = async () => {
     }
 };
 
-// Centralized Task Status Update
-const updateTaskStatusHelper = (task, newStatus) => {
-    task.status = newStatus;
-    task.updatedAt = new Date().toISOString();
-};
-
-// Task ID Validation
+// Helper Function to Validate Task ID
 const validateTaskId = (input) => {
     const id = parseInt(input);
     if (isNaN(id) || id <= 0) {
@@ -66,140 +58,184 @@ const validateTaskId = (input) => {
     return id;
 };
 
-// User Authentication (Admin Check)
-const authenticateUser = async (username, password) => {
-    const users = await readFileAsync(usersFilePath);
-    const user = users.find((u) => u.username === username && u.password === password);
-    return user;
+// Helper Function to Update Task Status
+const updateTaskStatus = (task, newStatus) => {
+    task.status = newStatus;
+    task.updatedAt = new Date().toISOString();
 };
 
-// Add User (Only Admin)
-const addUser = async (adminUser, username, password, role) => {
+// Authenticate User
+const authenticateUser = async (username, password) => {
     const users = await readFileAsync(usersFilePath);
-    if (adminUser.role !== "admin") {
-        console.log("Error: Only admins can add users.");
+    return users.find((user) => user.username === username && user.password === password);
+};
+
+// Admin Role Check
+const checkAdminRole = (user) => {
+    if (user && user.role === "admin") {
+        return true;
+    }
+    console.log("Error: Only admins can perform this action.");
+    return false;
+};
+
+// Task Management Functions
+const addTask = async (description) => {
+    const tasks = await readFileAsync(tasksFilePath);
+    const newId = tasks.length > 0 ? Math.max(...tasks.map((task) => task.id)) + 1 : 1;
+    const newTask = {
+        id: newId,
+        description,
+        status: TaskStatus.TODO,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+    tasks.push(newTask);
+    await writeFileAsync(tasksFilePath, tasks);
+    console.log(`Task added: "${description}" (ID: ${newTask.id})`);
+};
+
+const listTasks = async () => {
+    const tasks = await readFileAsync(tasksFilePath);
+    if (tasks.length === 0) {
+        console.log("No tasks found.");
+    } else {
+        console.log("Tasks:");
+        tasks
+            .sort((a, b) => a.id - b.id)
+            .forEach((task) => {
+                console.log(
+                    `[ID: ${task.id}] ${task.description} - Status: ${task.status.toUpperCase()} (Created: ${new Date(task.createdAt).toLocaleString()})`
+                );
+            });
+    }
+};
+
+const markTaskStatus = async (taskId, status) => {
+    const tasks = await readFileAsync(tasksFilePath);
+    const task = tasks.find((task) => task.id === taskId);
+    if (!task) {
+        console.log(`Error: Task with ID ${taskId} not found.`);
         return;
     }
-    const existingUser = users.find((user) => user.username === username);
-    if (existingUser) {
+    updateTaskStatus(task, status);
+    await writeFileAsync(tasksFilePath, tasks);
+    console.log(`Task marked as ${status}: "${task.description}" (ID: ${taskId})`);
+};
+
+const deleteTask = async (taskId) => {
+    const tasks = await readFileAsync(tasksFilePath);
+    const taskIndex = tasks.findIndex((task) => task.id === taskId);
+    if (taskIndex === -1) {
+        console.log(`Error: Task with ID ${taskId} not found.`);
+        return;
+    }
+    const deletedTask = tasks.splice(taskIndex, 1);
+    await writeFileAsync(tasksFilePath, tasks);
+    console.log(`Task deleted: "${deletedTask[0].description}" (ID: ${taskId})`);
+};
+
+// User Management Functions (Admin Only)
+const addUser = async (adminUser, username, password, role = "user") => {
+    if (!checkAdminRole(adminUser)) return;
+    const users = await readFileAsync(usersFilePath);
+    if (users.some((user) => user.username === username)) {
         console.log("Error: User already exists.");
         return;
     }
-    const newUser = { username, password, role };
-    users.push(newUser);
+    users.push({ username, password, role });
     await writeFileAsync(usersFilePath, users);
     console.log(`User "${username}" added successfully.`);
 };
 
+const removeUser = async (adminUser, username) => {
+    if (!checkAdminRole(adminUser)) return;
+    const users = await readFileAsync(usersFilePath);
+    const userIndex = users.findIndex((user) => user.username === username);
+    if (userIndex === -1) {
+        console.log(`Error: User "${username}" not found.`);
+        return;
+    }
+    users.splice(userIndex, 1);
+    await writeFileAsync(usersFilePath, users);
+    console.log(`User "${username}" removed successfully.`);
+};
+
 // Command Handlers
 const runApp = async () => {
+    await initializeFiles();
+
     switch (command) {
+        case "login":
+            const [loginUsername, loginPassword] = args.slice(1);
+            if (!loginUsername || !loginPassword) {
+                console.log("Error: Please provide both username and password.");
+                return;
+            }
+            const user = await authenticateUser(loginUsername, loginPassword);
+            if (user) {
+                console.log(`Logged in as ${user.username} (${user.role})`);
+            } else {
+                console.log("Error: Invalid username or password.");
+            }
+            break;
+
         case "add":
             const taskDescription = args[1];
             if (!taskDescription) {
                 console.log("Error: Please provide a task description.");
             } else {
-                const tasks = await readFileAsync(tasksFilePath);
-                const newId = tasks.length > 0 ? Math.max(...tasks.map((task) => task.id)) + 1 : 1;
-                const newTask = {
-                    id: newId,
-                    description: taskDescription,
-                    status: TaskStatus.TODO,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                };
-                tasks.push(newTask);
-                await writeFileAsync(tasksFilePath, tasks);
-                console.log(`Task added: "${taskDescription}" (ID: ${newTask.id})`);
+                await addTask(taskDescription);
             }
             break;
 
         case "list":
-            const tasks = await readFileAsync(tasksFilePath);
-            if (tasks.length === 0) {
-                console.log("No tasks found.");
-            } else {
-                console.log("Tasks:");
-                tasks
-                    .sort((a, b) => a.id - b.id)
-                    .forEach((task) => {
-                        console.log(
-                            `[ID: ${task.id}] ${task.description} - Status: ${task.status.toUpperCase()} (Created: ${new Date(task.createdAt).toLocaleString()})`
-                        );
-                    });
-            }
+            await listTasks();
             break;
 
         case "delete":
             const deleteId = validateTaskId(args[1]);
             if (deleteId) {
-                const tasks = await readFileAsync(tasksFilePath);
-                const taskIndex = tasks.findIndex((task) => task.id === deleteId);
-                if (taskIndex === -1) {
-                    console.log(`Error: Task with ID ${deleteId} not found.`);
-                } else {
-                    const deletedTask = tasks.splice(taskIndex, 1);
-                    await writeFileAsync(tasksFilePath, tasks);
-                    console.log(`Task deleted: "${deletedTask[0].description}" (ID: ${deleteId})`);
-                }
+                await deleteTask(deleteId);
             }
             break;
 
         case "mark-done":
-            const doneID = validateTaskId(args[1]);
-            if (doneID) {
-                const tasks = await readFileAsync(tasksFilePath);
-                const task = tasks.find((task) => task.id === doneID);
-                if (task) {
-                    updateTaskStatusHelper(task, TaskStatus.DONE);
-                    await writeFileAsync(tasksFilePath, tasks);
-                    console.log(`Task marked as done: "${task.description}" (ID: ${doneID})`);
-                } else {
-                    console.log(`Error: Task with ID ${doneID} not found.`);
-                }
+            const doneId = validateTaskId(args[1]);
+            if (doneId) {
+                await markTaskStatus(doneId, TaskStatus.DONE);
             }
             break;
 
         case "mark-in-progress":
-            const inProgressID = validateTaskId(args[1]);
-            if (inProgressID) {
-                const tasks = await readFileAsync(tasksFilePath);
-                const task = tasks.find((task) => task.id === inProgressID);
-                if (task) {
-                    updateTaskStatusHelper(task, TaskStatus.IN_PROGRESS);
-                    await writeFileAsync(tasksFilePath, tasks);
-                    console.log(`Task marked as in-progress: "${task.description}" (ID: ${inProgressID})`);
-                } else {
-                    console.log(`Error: Task with ID ${inProgressID} not found.`);
-                }
+            const inProgressId = validateTaskId(args[1]);
+            if (inProgressId) {
+                await markTaskStatus(inProgressId, TaskStatus.IN_PROGRESS);
             }
             break;
 
         case "mark-undone":
             const undoneId = validateTaskId(args[1]);
             if (undoneId) {
-                const tasks = await readFileAsync(tasksFilePath);
-                const task = tasks.find((task) => task.id === undoneId);
-                if (task) {
-                    updateTaskStatusHelper(task, TaskStatus.TODO);
-                    await writeFileAsync(tasksFilePath, tasks);
-                    console.log(`Task marked as undone: "${task.description}" (ID: ${undoneId})`);
-                } else {
-                    console.log(`Error: Task with ID ${undoneId} not found.`);
-                }
+                await markTaskStatus(undoneId, TaskStatus.TODO);
             }
             break;
 
         case "add-user":
-            const username = args[1];
-            const password = args[2];
-            const role = args[3] || "user"; // Default role is 'user'
-            const adminUsername = args[4];
-            const adminPassword = args[5];
+            const [username, password, role, adminUsername, adminPassword] = args.slice(1);
             const adminUser = await authenticateUser(adminUsername, adminPassword);
-
             if (adminUser) {
                 await addUser(adminUser, username, password, role);
+            } else {
+                console.log("Error: Invalid admin credentials.");
+            }
+            break;
+
+        case "remove-user":
+            const [userToRemove, adminUserForRemoval] = args.slice(1);
+            const adminForRemoval = await authenticateUser(adminUserForRemoval);
+            if (adminForRemoval) {
+                await removeUser(adminForRemoval, userToRemove);
             } else {
                 console.log("Error: Invalid admin credentials.");
             }
@@ -210,6 +246,7 @@ const runApp = async () => {
                 Task Tracker CLI:
                 -----------------
                 Available commands:
+                - login <username> <password>: Log in with a username and password
                 - add <task_description>: Add a new task
                 - list: List all tasks
                 - delete <task_id>: Delete a task by ID
@@ -217,19 +254,15 @@ const runApp = async () => {
                 - mark-in-progress <task_id>: Mark a task as in-progress
                 - mark-undone <task_id>: Mark a task as undone
                 - add-user <username> <password> <role> <admin_username> <admin_password>: Admin adds a new user
+                - remove-user <username> <admin_username> <admin_password>: Admin removes a user
                 - help: Show this help message
             `);
             break;
 
         default:
-            if (!command) {
-                console.log("No command provided. Use 'help' for available commands.");
-            } else {
-                console.log("Unknown command. Use 'help' for available commands.");
-            }
-            break;
+            console.log("Unknown command. Use 'help' for a list of available commands.");
     }
 };
 
-// Initialize the files when the app starts
-initializeFiles().then(runApp);
+// Start the application
+runApp();
