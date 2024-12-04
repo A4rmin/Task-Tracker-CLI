@@ -1,4 +1,4 @@
-// cli app to manage tasks
+// Task Tracker CLI App
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -6,25 +6,54 @@ const fs = require("fs");
 const path = require("path");
 const filePath = path.join(__dirname, "tasks.json");
 
+// Task Status Enum
+const TaskStatus = {
+    TODO: "todo",
+    DONE: "done",
+    IN_PROGRESS: "in-progress",
+};
+
 // Initialize tasks.json if it doesn't exist
 if (!fs.existsSync(filePath)) {
     fs.writeFileSync(filePath, JSON.stringify([]));
-    console.log("Initialized tasks.json file.")
-};
+    console.log("Initialized tasks.json file.");
+}
 
-// Helper functions
+// Helper Functions
 const readTasks = () => {
     const fileContent = fs.readFileSync(filePath, "utf-8");
     return JSON.parse(fileContent);
-}
+};
 
 const writeTasks = (tasks) => {
     fs.writeFileSync(filePath, JSON.stringify(tasks, null, 2));
     console.log("Tasks saved successfully.");
-}
+};
 
+const updateTaskStatus = (taskId, newStatus) => {
+    const tasks = readTasks(); // Always read fresh tasks
+    const task = tasks.find((task) => task.id === taskId);
+    if (!task) {
+        console.log(`Error: Task with ID ${taskId} not found.`);
+        return;
+    }
+    console.log(
+        `Task updated: "${task.description}" - Status changed from ${task.status.toUpperCase()} to ${newStatus.toUpperCase()} (ID: ${taskId})`
+    );
+    task.status = newStatus;
+    task.updatedAt = new Date().toISOString();
+    writeTasks(tasks);
+};
 
-// func to show help
+const validateTaskId = (input) => {
+    const id = parseInt(input);
+    if (isNaN(id)) {
+        console.log("Error: Please provide a valid task ID.");
+        return null;
+    }
+    return id;
+};
+
 const displayHelp = () => {
     console.log(`
         Task Tracker CLI:
@@ -37,50 +66,54 @@ const displayHelp = () => {
         - mark-undone <task_id>: Mark a task as undone
         - mark-in-progress <task_id>: Mark a task as in-progress
         - todo: Display tasks to do
+        - clear: Clear all tasks
         - help: Show this help message
-        `);
+    `);
 };
 
-
-
-// command handlers
-const tasks = readTasks();
-
+// Command Handlers
 switch (command) {
     case "add":
         const taskDescription = args[1];
         if (!taskDescription) {
             console.log("Error: Please provide a task description.");
         } else {
-            const newId = tasks.length > 0 ? Math.max(...tasks.map(task => task.id)) + 1 : 1;
+            const tasks = readTasks();
+            const newId = tasks.length > 0 ? Math.max(...tasks.map((task) => task.id)) + 1 : 1;
             const newTask = {
                 id: newId,
                 description: taskDescription,
-                status: "todo",
+                status: TaskStatus.TODO,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
             };
-            tasks.push(newTask)
-            writeTasks(tasks)
-            console.log(`Task added: ${taskDescription} (ID: ${newTask.id})`);
+            tasks.push(newTask);
+            writeTasks(tasks);
+            console.log(`Task added: "${taskDescription}" (ID: ${newTask.id})`);
         }
         break;
 
     case "list":
+        const tasks = readTasks();
         if (tasks.length === 0) {
             console.log("No tasks found.");
         } else {
             console.log("Tasks:");
-            tasks.forEach(task => {
-                console.log(`[ID: ${task.id}] ${task.description} - Status: ${task.status.toUpperCase()} (Created: ${new Date(task.createdAt).toLocaleString()})`);
-            });
+            tasks
+                .sort((a, b) => a.id - b.id)
+                .forEach((task) => {
+                    console.log(
+                        `[ID: ${task.id}] ${task.description} - Status: ${task.status.toUpperCase()} (Created: ${new Date(
+                            task.createdAt
+                        ).toLocaleString()})`
+                    );
+                });
         }
         break;
+
     case "delete":
-        const deleteId = parseInt(args[1]);
-        if (isNaN(deleteId)) {
-            console.log("Error: Please provide a valid task ID.")
-        } else {
+        const deleteId = validateTaskId(args[1]);
+        if (deleteId) {
             const tasks = readTasks();
             const taskIndex = tasks.findIndex((task) => task.id === deleteId);
             if (taskIndex === -1) {
@@ -89,80 +122,69 @@ switch (command) {
                 const deletedTask = tasks.splice(taskIndex, 1);
                 writeTasks(tasks);
                 console.log(`Task deleted: "${deletedTask[0].description}" (ID: ${deleteId})`);
-            };
-        };
-        break;
-    case "mark-done":
-        const doneID = parseInt(args[1]);
-        if (isNaN(doneID)) {
-            console.log("Error: Please provide a valid task ID.")
-        } else {
-            const tasks = readTasks();
-            const task = tasks.find((task) => task.id === doneID);
-
-            if (!task) {
-                console.log(`Error: Task with ID ${doneId} not found.`);
-            } else {
-                task.status = "done";
-                task.updatedAt = new Date().toISOString();
-                writeTasks(tasks);
-                console.log(`Task marked as done: "${task.description}" (ID: ${doneID})`);
-            }
-        };
-        break;
-    case "mark-in-progress":
-        const inProgressId = parseInt(args[1]);
-        if (isNaN(inProgressId)) {
-            console.log("Error: Please Provide a valid task ID.");
-        } else {
-            const tasks = readTasks();
-            const task = tasks.find((task) => task.id === inProgressId);
-
-            if (!task) {
-                console.log(`Error: Task with ID ${inProgressId} not found.`);
-            } else {
-                task.status = "in-progress";
-                task.updatedAt = new Date().toISOString();
-                writeTasks(tasks);
-                console.log(`Task marked as in-progress: "${task.description}" (ID: ${inProgressId})`);
-            }
-
-        };
-        break;
-    case "mark-undone":
-        const undoneId = parseInt(args[1]);
-        if (isNaN(undoneId)) {
-            console.log("Error: Please provide a valid task ID.")
-        } else {
-            const tasks = readTasks();
-            const task = tasks.find((task) => task.id === undoneId);
-
-            if (!task) {
-                console.log(`Error: Task with ID ${undoneId} not found.`);
-            } else {
-                task.status = "todo";
-                task.updatedAt = new Date().toISOString();
-                writeTasks(tasks);
-                console.log(`Task marked as undone: "${task.description}" (ID: ${undoneId})`);
             }
         }
         break;
-    case "todo":
-        const todoTasks = tasks.filter(task => task.status === "todo"); // Filter tasks with status "todo"
 
+    case "mark-done":
+        const doneID = validateTaskId(args[1]);
+        if (doneID) updateTaskStatus(doneID, TaskStatus.DONE);
+        break;
+
+    case "mark-in-progress":
+        const inProgressID = validateTaskId(args[1]);
+        if (inProgressID) updateTaskStatus(inProgressID, TaskStatus.IN_PROGRESS);
+        break;
+
+    case "mark-undone":
+        const undoneId = validateTaskId(args[1]);
+        if (undoneId) updateTaskStatus(undoneId, TaskStatus.TODO);
+        break;
+
+    case "todo":
+        const todoTasks = readTasks().filter((task) => task.status === TaskStatus.TODO);
         if (todoTasks.length === 0) {
             console.log("No tasks to do.");
         } else {
             console.log("Tasks to do:");
-            todoTasks.forEach(task => {
-                console.log(`[ID: ${task.id}] ${task.description} - Status: ${task.status.toUpperCase()} (Created: ${new Date(task.createdAt).toLocaleString()})`);
+            todoTasks.forEach((task) => {
+                console.log(
+                    `[ID: ${task.id}] ${task.description} - Status: ${task.status.toUpperCase()} (Created: ${new Date(
+                        task.createdAt
+                    ).toLocaleString()})`
+                );
             });
         }
         break;
+
+    case "clear":
+        const readline = require("readline");
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        rl.question("Are you sure you want to clear all tasks? This action cannot be undone. (yes/no): ", (answer) => {
+            if (answer.toLowerCase() === "yes") {
+                writeTasks([]);
+                console.log("All tasks cleared.");
+            } else {
+                console.log("Action canceled. No tasks were cleared.");
+            }
+            rl.close();
+        });
+        break;
+
+
     case "help":
         displayHelp();
         break;
+
     default:
-        console.log("Unknown command, Please use help for available commands");
+        if (!command) {
+            console.log("No command provided. Use 'help' for available commands.");
+        } else {
+            console.log("Unknown command. Use 'help' for available commands.");
+        }
         break;
 }
