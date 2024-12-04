@@ -1,8 +1,28 @@
 // cli app to manage tasks
 
 const args = process.argv.slice(2);
-
 const command = args[0];
+const fs = require("fs");
+const path = require("path");
+const filePath = path.join(__dirname, "tasks.json");
+
+// Initialize tasks.json if it doesn't exist
+if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, JSON.stringify([]));
+    console.log("Initialized tasks.json file.")
+};
+
+// Helper functions
+const readTasks = () => {
+    const fileContent = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(fileContent);
+}
+
+const writeTasks = () => {
+    fs.writeFileSync(filePath, JSON.stringify(tasks, null, 2));
+    console.log("Tasks saved successfully.");
+}
+
 
 // func to show help
 const displayHelp = () => {
@@ -20,6 +40,8 @@ const displayHelp = () => {
         - help: Show this help message
         `);
 };
+
+
 
 // command handlers
 switch (command) {
