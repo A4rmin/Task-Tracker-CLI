@@ -2,7 +2,7 @@ const args = process.argv.slice(2);
 const command = args[0];
 const fs = require("fs");
 const path = require("path");
-const readline = require("readline");
+// const readline = require("readline");
 
 const tasksFilePath = path.join(__dirname, "tasks.json");
 const usersFilePath = path.join(__dirname, "users.json");
@@ -67,7 +67,12 @@ const updateTaskStatus = (task, newStatus) => {
 // Authenticate User
 const authenticateUser = async (username, password) => {
     const users = await readFileAsync(usersFilePath);
-    return users.find((user) => user.username === username && user.password === password);
+    const user = users.find((user) => user.username === username && user.password === password);
+    if (!user) {
+        console.log("Error: Invalid credentials.");
+        return null;
+    }
+    return user;
 };
 
 // Admin Role Check
@@ -148,8 +153,12 @@ const addUser = async (adminUser, username, password, role = "user") => {
     console.log(`User "${username}" added successfully.`);
 };
 
-const removeUser = async (adminUser, username) => {
-    if (!checkAdminRole(adminUser)) return;
+const removeUser = async (adminUsername, adminPassword, username) => {
+    const adminUser = await authenticateUser(adminUsername, adminPassword);
+    if (!adminUser || adminUser.role !== 'admin') {
+        console.log("Error: Invalid admin credentials.");
+        return;
+    }
     const users = await readFileAsync(usersFilePath);
     const userIndex = users.findIndex((user) => user.username === username);
     if (userIndex === -1) {
@@ -232,13 +241,8 @@ const runApp = async () => {
             break;
 
         case "remove-user":
-            const [userToRemove, adminUserForRemoval] = args.slice(1);
-            const adminForRemoval = await authenticateUser(adminUserForRemoval);
-            if (adminForRemoval) {
-                await removeUser(adminForRemoval, userToRemove);
-            } else {
-                console.log("Error: Invalid admin credentials.");
-            }
+            const [userToRemove, adminUsernameForRemoval, adminPasswordForRemoval] = args.slice(1);
+            await removeUser(adminUsernameForRemoval, adminPasswordForRemoval, userToRemove);
             break;
 
         case "help":
