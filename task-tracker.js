@@ -92,16 +92,47 @@ switch (command) {
         };
         break;
     case "mark-done":
-        console.log("Marking a task as done ...");
+        const doneID = parseInt(args[1]);
+        if (isNaN(doneID)) {
+            console.log("Error: Please provide a valid task ID.")
+        } else {
+            const tasks = readTasks();
+            const task = tasks.find((task) => task.id === doneID);
+
+            if (!task) {
+                console.log(`Error: Task with ID ${doneId} not found.`);
+            } else {
+                task.status = "done";
+                task.updatedAt = new Date().toISOString();
+                writeTasks(tasks);
+                console.log(`Task marked as done: "${task.description}" (ID: ${doneID})`);
+            }
+        };
+        break;
+    case "mark-in-progress":
+        const inProgressId = parseInt(args[1]);
+        if (isNaN(inProgressId)) {
+            console.log("Error: Please Provide a valid task ID.");
+        } else {
+            const tasks = readTasks();
+            const task = tasks.find((task) => task.id === inProgressId);
+
+            if (!task) {
+                console.log(`Error: Task with ID ${inProgressId} not found.`);
+            } else {
+                task.status = "in-progress";
+                task.updatedAt = new Date().toISOString();
+                writeTasks(tasks);
+                console.log(`Task marked as in-progress: "${task.description}" (ID: ${inProgressId})`);
+            }
+
+        };
         break;
     case "mark-undone":
         console.log("Marking a task as undone ...");
         break;
     case "todo":
         console.log("Displaying tasks to do ...");
-        break;
-    case "mark-in-progress":
-        console.log("Marking a task as in-progress...");
         break;
     case "help":
         displayHelp();
