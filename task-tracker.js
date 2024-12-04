@@ -48,7 +48,7 @@ switch (command) {
     case "add":
         const taskDescription = args[1];
         if (!taskDescription) {
-            console.log("ERROR: Please provide a task description.");
+            console.log("Error: Please provide a task description.");
         } else {
             const tasks = readTasks();
             const newTask = {
@@ -129,7 +129,22 @@ switch (command) {
         };
         break;
     case "mark-undone":
-        console.log("Marking a task as undone ...");
+        const undoneId = parseInt(args[1]);
+        if (isNAN(undoneId)) {
+            console.log("Error: Please provide a valid task ID.")
+        } else {
+            const tasks = readTasks();
+            const task = tasks.find((task) => task.id === undoneId);
+
+            if (!task) {
+                console.log(`Error: Task with ID ${undoneId} not found.`);
+            } else {
+                task.status = "todo";
+                task.updatedAt = new Date().toISOString();
+                writeTasks(tasks);
+                console.log(`Task marked as undone: "${task.description}" (ID: ${undoneId})`);
+            }
+        }
         break;
     case "todo":
         console.log("Displaying tasks to do ...");
