@@ -71,7 +71,7 @@ switch (command) {
         } else {
             console.log("Tasks:");
             tasks.forEach(task => {
-                console.log(`[${task.id}] ${task.description} - ${task.status}`);
+                console.log(`[${task.id}] ${task.description} - ${task.status.toUpperCase()} (Created: ${new Date(task.createdAt).toLocaleString()})`);
             });
         }
         break;
