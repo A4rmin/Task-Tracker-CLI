@@ -1,17 +1,23 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 const args = process.argv.slice(2);
 const command = args[0];
 const fs = require("fs");
 const path = require("path");
-// const readline = require("readline");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
-const tasksFilePath = path.join(__dirname, "tasks.json");
-const usersFilePath = path.join(__dirname, "users.json");
+const tasksFilePath = process.env.TASKS_FILE_PATH || path.join(__dirname, "tasks.json");
+const usersFilePath = process.env.USERS_FILE_PATH || path.join(__dirname, "users.json");
 
 const TaskStatus = {
     TODO: "todo",
     DONE: "done",
     IN_PROGRESS: "in-progress",
 };
+
+const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY;  // JWT secret key from environment variable
 
 // Helper Functions for File Operations
 const readFileAsync = async (filePath) => {
@@ -37,12 +43,19 @@ const writeFileAsync = async (filePath, data) => {
 const initializeFiles = async () => {
     const files = [
         { path: tasksFilePath, defaultData: [] },
-        { path: usersFilePath, defaultData: [{ username: "admin", password: "admin123", role: "admin" }] },
+        {
+            path: usersFilePath,
+            defaultData: async () => {
+                const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
+                return [{ username: process.env.ADMIN_USERNAME, password: hashedPassword, role: process.env.ADMIN_ROLE }];
+            }
+        },
     ];
 
     for (const file of files) {
         if (!fs.existsSync(file.path)) {
-            await writeFileAsync(file.path, file.defaultData);
+            const data = typeof file.defaultData === 'function' ? await file.defaultData() : file.defaultData;
+            await writeFileAsync(file.path, data);
             console.log(`Initialized ${path.basename(file.path)} file.`);
         }
     }
@@ -64,11 +77,18 @@ const updateTaskStatus = (task, newStatus) => {
     task.updatedAt = new Date().toISOString();
 };
 
-// Authenticate User
+// Authentication Functions
+
+// Generate JWT token after successful login
+const generateAuthToken = (user) => {
+    return jwt.sign({ username: user.username, role: user.role }, JWT_SECRET_KEY, { expiresIn: "1h" });
+};
+
+// Authenticate User (Check password with bcrypt)
 const authenticateUser = async (username, password) => {
     const users = await readFileAsync(usersFilePath);
-    const user = users.find((user) => user.username === username && user.password === password);
-    if (!user) {
+    const user = users.find((user) => user.username === username);
+    if (!user || !await bcrypt.compare(password, user.password)) {
         console.log("Error: Invalid credentials.");
         return null;
     }
@@ -140,6 +160,18 @@ const deleteTask = async (taskId) => {
     console.log(`Task deleted: "${deletedTask[0].description}" (ID: ${taskId})`);
 };
 
+const clearTasks = async () => {
+    const confirmation = args[1];
+    const doubleCheck = args[2];
+
+    if (confirmation !== "yes" || doubleCheck !== "confirm") {
+        console.log("Error: To clear all tasks, use 'clear yes confirm'.");
+        return;
+    }
+    await writeFileAsync(tasksFilePath, []);
+    console.log("All tasks have been cleared successfully.");
+};
+
 // User Management Functions (Admin Only)
 const addUser = async (adminUser, username, password, role = "user") => {
     if (!checkAdminRole(adminUser)) return;
@@ -148,7 +180,8 @@ const addUser = async (adminUser, username, password, role = "user") => {
         console.log("Error: User already exists.");
         return;
     }
-    users.push({ username, password, role });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    users.push({ username, password: hashedPassword, role });
     await writeFileAsync(usersFilePath, users);
     console.log(`User "${username}" added successfully.`);
 };
@@ -183,7 +216,8 @@ const runApp = async () => {
             }
             const user = await authenticateUser(loginUsername, loginPassword);
             if (user) {
-                console.log(`Logged in as ${user.username} (${user.role})`);
+                const token = generateAuthToken(user);
+                console.log(`Logged in as ${user.username} (${user.role}). Your token: ${token}`);
             } else {
                 console.log("Error: Invalid username or password.");
             }
@@ -199,6 +233,7 @@ const runApp = async () => {
             break;
 
         case "list":
+            console.log("Fetching tasks...");
             await listTasks();
             break;
 
@@ -230,6 +265,10 @@ const runApp = async () => {
             }
             break;
 
+        case "clear":
+            await clearTasks();
+            break;
+
         case "add-user":
             const [username, password, role, adminUsername, adminPassword] = args.slice(1);
             const adminUser = await authenticateUser(adminUsername, adminPassword);
@@ -257,6 +296,7 @@ const runApp = async () => {
                 - mark-done <task_id>: Mark a task as done
                 - mark-in-progress <task_id>: Mark a task as in-progress
                 - mark-undone <task_id>: Mark a task as undone
+                - clear: Clear all tasks after double confirmation
                 - add-user <username> <password> <role> <admin_username> <admin_password>: Admin adds a new user
                 - remove-user <username> <admin_username> <admin_password>: Admin removes a user
                 - help: Show this help message
