@@ -41,7 +41,7 @@ This project facilitated the acquisition and application of key backend developm
 ### Setup Instructions
 1. Clone the repository:
    ```bash
-   git clone https://github.com/<your-username>/task-tracker-cli.git
+   git clone https://github.com/a4rmin/task-tracker-cli.git
    cd task-tracker-cli
    ```
 2. Install required dependencies:
