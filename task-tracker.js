@@ -24,6 +24,11 @@ if (!JWT_SECRET_KEY) {
     process.exit(1);
 }
 
+if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD || !process.env.ADMIN_ROLE) {
+    console.error("FATAL ERROR: ADMIN_USERNAME, ADMIN_PASSWORD, and ADMIN_ROLE must be defined in environment variables.");
+    process.exit(1);
+}
+
 // Helper Functions for File Operations
 const readFileAsync = async (filePath) => {
     try {
@@ -100,6 +105,17 @@ const authenticateUser = async (username, password) => {
     return user;
 };
 
+// Verify JWT Token
+const verifyToken = (token) => {
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET_KEY);
+        return decoded;
+    } catch (err) {
+        console.log("Error: Invalid or expired token. Please login again.");
+        return null;
+    }
+};
+
 // Admin Role Check
 const checkAdminRole = (user) => {
     if (user && user.role === "admin") {
@@ -166,11 +182,11 @@ const deleteTask = async (taskId) => {
 };
 
 const clearTasks = async () => {
-    const confirmation = args[1];
-    const doubleCheck = args[2];
+    const confirmation = args[2];
+    const doubleCheck = args[3];
 
     if (confirmation !== "yes" || doubleCheck !== "confirm") {
-        console.log("Error: To clear all tasks, use 'clear yes confirm'.");
+        console.log("Error: To clear all tasks, use 'clear <token> yes confirm'.");
         return;
     }
     await writeFileAsync(tasksFilePath, []);
@@ -229,49 +245,92 @@ const runApp = async () => {
             break;
 
         case "add":
-            const taskDescription = args[1];
-            if (!taskDescription) {
-                console.log("Error: Please provide a task description.");
-            } else {
+            const [addToken, taskDescription] = args.slice(1);
+            if (!addToken || !taskDescription) {
+                console.log("Error: Usage: add <token> <task_description>");
+                return;
+            }
+            const addUser = verifyToken(addToken);
+            if (addUser) {
                 await addTask(taskDescription);
             }
             break;
 
         case "list":
-            console.log("Fetching tasks...");
-            await listTasks();
+            const listToken = args[1];
+            if (!listToken) {
+                console.log("Error: Usage: list <token>");
+                return;
+            }
+            const listUser = verifyToken(listToken);
+            if (listUser) {
+                console.log("Fetching tasks...");
+                await listTasks();
+            }
             break;
 
         case "delete":
-            const deleteId = validateTaskId(args[1]);
-            if (deleteId) {
+            const deleteToken = args[1];
+            const deleteId = validateTaskId(args[2]);
+            if (!deleteToken || !deleteId) {
+                console.log("Error: Usage: delete <token> <task_id>");
+                return;
+            }
+            const deleteUser = verifyToken(deleteToken);
+            if (deleteUser && deleteId) {
                 await deleteTask(deleteId);
             }
             break;
 
         case "mark-done":
-            const doneId = validateTaskId(args[1]);
-            if (doneId) {
+            const doneToken = args[1];
+            const doneId = validateTaskId(args[2]);
+            if (!doneToken || !doneId) {
+                console.log("Error: Usage: mark-done <token> <task_id>");
+                return;
+            }
+            const doneUser = verifyToken(doneToken);
+            if (doneUser && doneId) {
                 await markTaskStatus(doneId, TaskStatus.DONE);
             }
             break;
 
         case "mark-in-progress":
-            const inProgressId = validateTaskId(args[1]);
-            if (inProgressId) {
+            const progressToken = args[1];
+            const inProgressId = validateTaskId(args[2]);
+            if (!progressToken || !inProgressId) {
+                console.log("Error: Usage: mark-in-progress <token> <task_id>");
+                return;
+            }
+            const progressUser = verifyToken(progressToken);
+            if (progressUser && inProgressId) {
                 await markTaskStatus(inProgressId, TaskStatus.IN_PROGRESS);
             }
             break;
 
         case "mark-undone":
-            const undoneId = validateTaskId(args[1]);
-            if (undoneId) {
+            const undoneToken = args[1];
+            const undoneId = validateTaskId(args[2]);
+            if (!undoneToken || !undoneId) {
+                console.log("Error: Usage: mark-undone <token> <task_id>");
+                return;
+            }
+            const undoneUser = verifyToken(undoneToken);
+            if (undoneUser && undoneId) {
                 await markTaskStatus(undoneId, TaskStatus.TODO);
             }
             break;
 
         case "clear":
-            await clearTasks();
+            const clearToken = args[1];
+            if (!clearToken) {
+                console.log("Error: Usage: clear <token> yes confirm");
+                return;
+            }
+            const clearUser = verifyToken(clearToken);
+            if (clearUser && checkAdminRole(clearUser)) {
+                await clearTasks();
+            }
             break;
 
         case "add-user":
@@ -294,14 +353,14 @@ const runApp = async () => {
                 Task Tracker CLI:
                 -----------------
                 Available commands:
-                - login <username> <password>: Log in with a username and password
-                - add <task_description>: Add a new task
-                - list: List all tasks
-                - delete <task_id>: Delete a task by ID
-                - mark-done <task_id>: Mark a task as done
-                - mark-in-progress <task_id>: Mark a task as in-progress
-                - mark-undone <task_id>: Mark a task as undone
-                - clear: Clear all tasks after double confirmation
+                - login <username> <password>: Log in and receive JWT token
+                - add <token> <task_description>: Add a new task (requires authentication)
+                - list <token>: List all tasks (requires authentication)
+                - delete <token> <task_id>: Delete a task by ID (requires authentication)
+                - mark-done <token> <task_id>: Mark a task as done (requires authentication)
+                - mark-in-progress <token> <task_id>: Mark a task as in-progress (requires authentication)
+                - mark-undone <token> <task_id>: Mark a task as undone (requires authentication)
+                - clear <token> yes confirm: Clear all tasks (admin only)
                 - add-user <username> <password> <role> <admin_username> <admin_password>: Admin adds a new user
                 - remove-user <username> <admin_username> <admin_password>: Admin removes a user
                 - help: Show this help message
