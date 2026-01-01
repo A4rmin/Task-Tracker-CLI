@@ -19,6 +19,11 @@ const TaskStatus = {
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET_KEY;  // JWT secret key from environment variable
 
+if (!JWT_SECRET_KEY) {
+    console.error("FATAL ERROR: JWT_SECRET_KEY is not defined in environment variables.");
+    process.exit(1);
+}
+
 // Helper Functions for File Operations
 const readFileAsync = async (filePath) => {
     try {
